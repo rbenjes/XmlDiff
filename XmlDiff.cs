@@ -11,26 +11,24 @@ namespace XmlDiff
 {
     public class XmlDiff
     {
+        private static bool XNodeDeepEquals(XNode x, XNode y)
+        {
+            return XNode.DeepEquals(x, y);
+        }
         private static void Partition(IEnumerable<XNode> nodes)
         {
-            var numbered = nodes.Select((x, i) => Tuple.Create(i, x, x.ToString())).ToList();
-            List<List<Tuple<int, XNode, string>>> partitions = new List<List<Tuple<int, XNode, string>>>();
-            foreach (var num in numbered)
-            {
-                var partition = partitions.FirstOrDefault(p => p.Any(x => XNode.DeepEquals(x.Item2, num.Item2)));
-                if (partition == null)
-                {
-                    partition = new List<Tuple<int, XNode, string>>();
-                    partitions.Add(partition);
-                }
-                partition.Add(num);
-            }
+            var numbered = nodes.Select((x, i) => new DiffItem() { Number = i, Node = x, NodeAsString = x.ToString() }).ToList();
+            List<List<DiffItem>> partitions = numbered.GroupBy(x => x.Node, LambdaEqualityComparer.Create<XNode>(XNodeDeepEquals)).Select(CreateDiffItems).ToList();
             foreach (var partition in partitions)
             {
                 var p = partition[0];
-                var text = p.Item2.ToString();
-                File.WriteAllText(string.Format("node-{0}-{1}.txt", p.Item1, partition.Count), text);
+                File.WriteAllText(string.Format("node-{0}-{1}.txt", p.Number, partition.Count), p.NodeAsString);
             }
+        }
+
+        private static List<DiffItem> CreateDiffItems(IGrouping<XNode, DiffItem> group)
+        {
+            return new List<DiffItem>(group.Select(x => x));
         }
 
         private static XmlNamespaceManager CreateXmlNamespaceManager(XmlReader reader, XElement root)
