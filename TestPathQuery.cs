@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -21,20 +19,20 @@ namespace XmlDiff
     {
         public static void Test()
         {
+            // /ArrayOfCT_Ergebniseintrag/CT_Ergebniseintrag/Antworten[count(CT_MMAntwort[FragenID='1']/FragenID)>2]/../TarifauspraegungID/node()
+            string xpath = "//ns:CT_Ergebniseintrag/ns:Antworten/ns:CT_MMAntwort";
+            var atts = new List<XAttribute>() { new XAttribute(XName.Get("a"), "http://schemas.microsoft.com/2003/10/Serialization/Arrays") };
             var files = System.IO.Directory.GetFiles(@"D:\Projects\neu\MMOffice\dev\src\main\Common\MM.Office.Common\Data\CV\Bedingungen\", "BedingungenAntwortenTap*.zip");
             foreach (var file in files)
-                Test(file);
+                Test(file, atts, xpath);
         }
 
-        private static void Test(string file)
+        private static void Test(string file, List<XAttribute> atts, string xpath)
         {
             var fileName = System.IO.Path.GetFileNameWithoutExtension(file);
-            // /ArrayOfCT_Ergebniseintrag/CT_Ergebniseintrag/Antworten[count(CT_MMAntwort[FragenID='1']/FragenID)>2]/../TarifauspraegungID/node()
-            var atts = new List<XAttribute>() { new XAttribute(XName.Get("a"), "http://schemas.microsoft.com/2003/10/Serialization/Arrays") };
-            string path = "//ns:CT_Ergebniseintrag/ns:Antworten/ns:CT_MMAntwort";
             PathQuery pathQuery = new PathQuery(XmlReader.Create(ZipUtils.Unzip(file)), atts);
-            var result = pathQuery.SelectElements(path, null);
-            var tapRows = result.GroupBy(x => x.Parent).SelectMany(x => CreateTapRows(x, pathQuery)).ToList();
+            var queryElements = pathQuery.SelectElements(xpath, null);
+            var tapRows = queryElements.GroupBy(x => x.Parent).SelectMany(x => CreateTapRows(x, pathQuery)).ToList();
             foreach (var tapRow in tapRows)
             {
                 Console.WriteLine("{0};{1}", fileName, tapRow);
@@ -56,10 +54,9 @@ namespace XmlDiff
 
         private static List<string> CreateTapRows(IGrouping<XElement, XElement> group, PathQuery pathQuery)
         {
-            var tapElem = group.Key.Parent;
-            var tap = (int)tapElem.XPathSelectElement("ns:TarifauspraegungID/a:string", pathQuery.NamespaceManager);
-            var g = group.ToList();
-            var antworten = g.Select(x => CreateAntwort(x, pathQuery)).GroupBy(x => x.FragenID).Select(x => x.ToList()).Where(x => x.Count > 2).ToList();
+            var tap = (int)group.Key.Parent.XPathSelectElement("ns:TarifauspraegungID/a:string", pathQuery.NamespaceManager);
+            var groupElements = group.ToList();
+            var antworten = groupElements.Select(x => CreateAntwort(x, pathQuery)).GroupBy(x => x.FragenID).Select(x => x.ToList()).Where(x => x.Count > 2).ToList();
             var result = antworten.Select(antwGroup => string.Join(";", GetCsvRow(antwGroup, tap))).ToList();
             return result;
         }
